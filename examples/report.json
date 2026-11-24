@@ -5,7 +5,15 @@
       {
         "topic": "job_title",
         "source_fields": [
-          "job-name"
+          "job-name",
+          "description",
+          "conditions",
+          "duty",
+          "requirements",
+          "requirement",
+          "qualification",
+          "additionalInfo",
+          "benefitDetails"
         ],
         "source_value": "",
         "problem": "В карточке не удалось найти сведения по теме «название должности».",
@@ -15,7 +23,15 @@
       {
         "topic": "requirements",
         "source_fields": [
-          "requirements"
+          "requirements",
+          "requirement",
+          "qualification",
+          "skills",
+          "description",
+          "conditions",
+          "duty",
+          "additionalInfo",
+          "benefitDetails"
         ],
         "source_value": "",
         "problem": "В карточке не удалось найти сведения по теме «требования».",
@@ -35,7 +51,16 @@
       {
         "topic": "location",
         "source_fields": [
-          "addresses.address"
+          "addresses.address.location",
+          "workLocation",
+          "description",
+          "conditions",
+          "duty",
+          "requirements",
+          "requirement",
+          "qualification",
+          "additionalInfo",
+          "benefitDetails"
         ],
         "source_value": "",
         "problem": "В карточке не удалось найти сведения по теме «место работы».",
@@ -45,7 +70,15 @@
       {
         "topic": "employment",
         "source_fields": [
-          "employment"
+          "employment",
+          "description",
+          "conditions",
+          "duty",
+          "requirements",
+          "requirement",
+          "qualification",
+          "additionalInfo",
+          "benefitDetails"
         ],
         "source_value": "",
         "problem": "В карточке не удалось найти сведения по теме «тип занятости».",
