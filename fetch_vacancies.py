@@ -2,7 +2,7 @@ import argparse
 import json
 from http.client import HTTPException
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -12,13 +12,26 @@ from analyze_vacancies import read_vacancies, write_report
 
 REGION_39 = "https://opendata.trudvsem.ru/api/v1/vacancies/region/39"
 
+MAX_PAGE_BYTES = 8 * 1024 * 1024
+FETCH_SECONDS = 300
 
-def read_page(url):
+
+def read_page(url, deadline):
     request = Request(url, headers={"Accept": "application/json", "User-Agent": "transparent-vacancy/1.0"})
     for attempt in range(2):
         try:
-            with urlopen(request, timeout=60) as response:
-                return json.load(response)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ValueError("Истекло время загрузки вакансий.")
+            with urlopen(request, timeout=min(60, remaining)) as response:
+                body = bytearray()
+                while chunk := response.read1(65536):
+                    if monotonic() >= deadline:
+                        raise ValueError("Истекло время загрузки вакансий.")
+                    if len(body) + len(chunk) > MAX_PAGE_BYTES:
+                        raise ValueError("Страница API превышает допустимый размер.")
+                    body.extend(chunk)
+                return json.loads(body)
         except HTTPError as error:
             if attempt or error.code not in (408, 502, 503, 504):
                 raise
@@ -39,16 +52,14 @@ def fetch_vacancies(url, limit):
     page_size = min(10, max(1, limit // 2))
     offset = 0
     collected = {}
-    seen_pages = set()
+    deadline = monotonic() + FETCH_SECONDS
+    expected = None
     while len(collected) < limit:
         query = urlencode(filters + [("offset", offset), ("limit", page_size)])
         page_url = urlunsplit(source._replace(query=query, fragment=""))
-        page = read_page(page_url)
-        records = list(read_vacancies(page))
-        ids = tuple(record["id"] for record in records)
-        if ids and ids in seen_pages:
-            raise ValueError("Источник повторил страницу при переходе к следующей.")
-        seen_pages.add(ids)
+        page = read_page(page_url, deadline)
+        records = read_vacancies(page)
+        previous_count = len(collected)
         for record in records:
             collected[record["id"]] = record
             if len(collected) == limit:
@@ -56,9 +67,15 @@ def fetch_vacancies(url, limit):
         offset += 1
         metadata = page.get("meta")
         total = metadata.get("total") if isinstance(metadata, dict) else None
-        if len(page["results"]["vacancies"]) < page_size:
+        if str(total).isdecimal():
+            expected = min(limit, int(total))
+        if records and len(collected) == previous_count:
+            raise ValueError("На следующей странице нет новых вакансий.")
+        if expected is not None and len(collected) >= expected:
             break
-        if str(total).isdecimal() and offset * page_size >= int(total):
+        if len(page["results"]["vacancies"]) < page_size:
+            if expected is not None and len(collected) < expected:
+                raise ValueError("API вернул меньше вакансий, чем указано в meta.total.")
             break
 
     return {
@@ -78,7 +95,7 @@ def main():
     try:
         payload = fetch_vacancies(args.url, args.limit)
         write_report(args.output, payload)
-    except (ValueError, OSError, HTTPException) as error:
+    except (ValueError, OSError, RecursionError, HTTPException) as error:
         parser.exit(1, f"Ошибка загрузки: {error}\n")
     print(f"Сохранено вакансий: {payload['meta']['total']}. Файл: {args.output}")
 
