@@ -16,7 +16,7 @@ def main():
         vacancies = read_vacancies(fetch_vacancies(args.url, args.limit))
         report = [analyze_vacancy(vacancy) for vacancy in vacancies]
         write_report(args.output, report)
-    except (ValueError, OSError, HTTPException) as error:
+    except (ValueError, OSError, RecursionError, HTTPException) as error:
         parser.exit(1, f"Ошибка формирования отчёта: {error}\n")
     print(f"Сохранён отчёт по {len(report)} вакансиям: {args.output}")
 
