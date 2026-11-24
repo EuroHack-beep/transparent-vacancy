@@ -3,5 +3,8 @@ __pycache__/
 /vacancies.json
 /check.json
 /live-check.json
+/*.json.lock
+/.venv-train/
+/model-candidate.json
 /reports/*
 !/reports/.gitkeep

@@ -8,3 +8,7 @@ EnvironmentFile=-%h/.config/transparent-vacancy/config.env
 StateDirectory=transparent-vacancy
 ExecStart=/usr/bin/python3 run_report.py --output %S/transparent-vacancy/latest.json
 TimeoutStartSec=15min
+MemoryMax=512M
+CPUQuota=200%
+TasksMax=64
+NoNewPrivileges=true

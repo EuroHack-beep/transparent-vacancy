@@ -1,6 +1,11 @@
 x-report: &report
   build: .
   read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  cpus: 2
+  mem_limit: 512m
+  pids_limit: 64
   user: "${REPORT_UID:-1000}:${REPORT_GID:-1000}"
   volumes:
     - type: bind
@@ -12,6 +17,7 @@ x-report: &report
 services:
   report:
     <<: *report
+    network_mode: none
   live:
     <<: *report
     profiles: [live]
@@ -20,3 +26,8 @@ services:
       VACANCY_SOURCE: "${VACANCY_SOURCE:-}"
       VACANCY_LIMIT: "${VACANCY_LIMIT:-}"
       VACANCY_TIMEOUT: "${VACANCY_TIMEOUT:-}"
+      VACANCY_ALLOW_HTTP: "${VACANCY_ALLOW_HTTP:-}"
+      VACANCY_ALLOWED_ORIGINS: "${VACANCY_ALLOWED_ORIGINS:-}"
+      VACANCY_PRIVATE_ORIGINS: "${VACANCY_PRIVATE_ORIGINS:-}"
+      VACANCY_MAX_PAGES: "${VACANCY_MAX_PAGES:-}"
+      VACANCY_DEADLINE: "${VACANCY_DEADLINE:-}"
