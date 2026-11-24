@@ -1,6 +1,15 @@
 name: Vacancy report
+
 on:
   workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Лимит уникальных вакансий для ручного запуска'
+        type: string
+        default: '4'
+      source_url:
+        description: 'URL источника (пусто — использовать настройки репозитория)'
+        type: string
   schedule:
     - cron: '17 5 * * *'
 
@@ -15,18 +24,23 @@ jobs:
   report:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Generate vacancy report
         env:
-          VACANCY_SOURCE: ${{ vars.VACANCY_SOURCE }}
-          VACANCY_LIMIT: ${{ vars.VACANCY_LIMIT }}
+          VACANCY_SOURCE: ${{ inputs.source_url || vars.VACANCY_SOURCE }}
+          VACANCY_LIMIT: ${{ inputs.limit || vars.VACANCY_LIMIT }}
           VACANCY_TIMEOUT: ${{ vars.VACANCY_TIMEOUT }}
         run: python run_report.py --output report.json
-      - uses: actions/upload-artifact@v7
+
+      - name: Upload the vacancy report
+        uses: actions/upload-artifact@v7
         with:
           name: vacancy-report
           path: report.json
