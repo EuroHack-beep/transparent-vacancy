@@ -1,0 +1,11 @@
+**
+!Dockerfile
+!analyze_vacancies.py
+!clarity_model.py
+!fetch_vacancies.py
+!run_report.py
+!vacancy_checks.py
+!vacancy_facts.py
+!examples
+examples/*
+!examples/vacancies.json
