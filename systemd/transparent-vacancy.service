@@ -1,0 +1,10 @@
+[Unit]
+Description=Transparent Vacancy report
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/transparent-vacancy
+EnvironmentFile=-%h/.config/transparent-vacancy/config.env
+StateDirectory=transparent-vacancy
+ExecStart=/usr/bin/python3 run_report.py --output %S/transparent-vacancy/latest.json
+TimeoutStartSec=15min

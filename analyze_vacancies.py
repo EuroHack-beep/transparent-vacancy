@@ -6,7 +6,7 @@ import tempfile
 from vacancy_checks import check_conditions
 
 
-def read_vacancies(payload):
+def read_page_vacancies(payload):
     if not isinstance(payload, dict):
         raise ValueError("Ответ API должен быть JSON-объектом.")
 
@@ -15,11 +15,15 @@ def read_vacancies(payload):
         raise ValueError("Входной JSON содержит ответ API с ошибкой.")
 
     results = payload.get("results")
-    if not isinstance(results, dict) or not isinstance(results.get("vacancies"), list):
+    entries = results.get("vacancies") if isinstance(results, dict) else None
+    metadata = payload.get("meta")
+    if entries is None and isinstance(metadata, dict) and str(metadata.get("total")) == "0":
+        return []
+    if not isinstance(entries, list):
         raise ValueError("В ответе API ожидается массив results.vacancies.")
 
-    vacancies = {}
-    for index, entry in enumerate(results["vacancies"], start=1):
+    vacancies = []
+    for index, entry in enumerate(entries, start=1):
         vacancy = entry.get("vacancy") if isinstance(entry, dict) else None
         if not isinstance(vacancy, dict):
             raise ValueError(f"Запись {index} должна содержать объект vacancy.")
@@ -27,37 +31,22 @@ def read_vacancies(payload):
         vacancy_id = vacancy.get("id")
         if not isinstance(vacancy_id, str) or not vacancy_id.strip():
             raise ValueError(f"В записи {index} отсутствует строковый vacancy.id.")
-        vacancies[vacancy_id] = vacancy
+        vacancies.append(vacancy)
 
+    return vacancies
+
+
+def read_vacancies(payload):
+    pages = payload if isinstance(payload, list) else [payload]
+    vacancies = {}
+    for page in pages:
+        for vacancy in read_page_vacancies(page):
+            vacancies[vacancy["id"].strip()] = vacancy
     return vacancies.values()
 
 
-def positive_salary(value):
-    if isinstance(value, str) and value.strip().isdecimal():
-        value = int(value.strip())
-    if type(value) is int and value > 0:
-        return value
-    return None
-
-
 def analyze_vacancy(vacancy):
-    minimum = positive_salary(vacancy.get("salary_min"))
-    maximum = positive_salary(vacancy.get("salary_max"))
-    issues = check_conditions(vacancy, minimum is not None or maximum is not None)
-    if minimum is not None and maximum is not None and minimum > maximum:
-        issues.append({
-            "topic": "salary",
-            "method": "rule",
-            "source_fields": ["salary_min", "salary_max"],
-            "source_value": {
-                "salary_min": vacancy["salary_min"],
-                "salary_max": vacancy["salary_max"],
-            },
-            "problem": "Минимальная зарплата указана выше максимальной.",
-            "recommendation": "Уточните нижнюю и верхнюю границы зарплаты и исправьте диапазон.",
-        })
-
-    report_entry = {"id": vacancy["id"], "issues": issues}
+    report_entry = {"id": vacancy["id"], "issues": check_conditions(vacancy)}
     url = vacancy.get("vac_url")
     if isinstance(url, str) and url.strip():
         report_entry["url"] = url
@@ -67,6 +56,7 @@ def analyze_vacancy(vacancy):
 def write_report(output_path, report):
     temporary_path = None
     try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", newline="\n", dir=output_path.parent, delete=False
         ) as temporary_file:

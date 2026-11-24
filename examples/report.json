@@ -6,88 +6,49 @@
         "topic": "job_title",
         "source_fields": [
           "job-name",
-          "description",
-          "conditions",
-          "duty",
-          "requirements",
-          "requirement",
-          "qualification",
+          "job_title",
+          "jobTitle",
+          "title",
           "additionalInfo",
-          "benefitDetails"
+          "benefitDetails",
+          "conditions",
+          "description",
+          "duties",
+          "duty",
+          "qualification",
+          "requirement",
+          "requirements",
+          "responsibilities"
         ],
         "source_value": "",
-        "problem": "В карточке не удалось найти сведения по теме «название должности».",
-        "recommendation": "Как называется должность?",
+        "problem": "В карточке не указано условие по теме «название должности».",
+        "recommendation": "Укажите название должности и специализацию.",
         "method": "rule"
       },
       {
         "topic": "requirements",
         "source_fields": [
-          "requirements",
           "requirement",
+          "requirements",
           "qualification",
           "skills",
-          "description",
-          "conditions",
-          "duty",
+          "education",
+          "experience",
           "additionalInfo",
-          "benefitDetails"
+          "benefitDetails",
+          "conditions",
+          "description",
+          "duties",
+          "duty",
+          "responsibilities"
         ],
         "source_value": "",
-        "problem": "В карточке не удалось найти сведения по теме «требования».",
-        "recommendation": "Какие навыки, образование или опыт нужны для этой работы?",
-        "method": "rule"
-      },
-      {
-        "topic": "schedule",
-        "source_fields": [
-          "schedule"
-        ],
-        "source_value": "Гибкий график работы",
-        "problem": "Формулировка оставляет открытым вопрос о рабочих днях и часах.",
-        "recommendation": "В какие дни и часы предстоит работать?",
-        "method": "nearest_neighbor"
-      },
-      {
-        "topic": "location",
-        "source_fields": [
-          "addresses.address.location",
-          "workLocation",
-          "description",
-          "conditions",
-          "duty",
-          "requirements",
-          "requirement",
-          "qualification",
-          "additionalInfo",
-          "benefitDetails"
-        ],
-        "source_value": "",
-        "problem": "В карточке не удалось найти сведения по теме «место работы».",
-        "recommendation": "По какому адресу предстоит работать или возможна ли удалённая работа?",
-        "method": "rule"
-      },
-      {
-        "topic": "employment",
-        "source_fields": [
-          "employment",
-          "description",
-          "conditions",
-          "duty",
-          "requirements",
-          "requirement",
-          "qualification",
-          "additionalInfo",
-          "benefitDetails"
-        ],
-        "source_value": "",
-        "problem": "В карточке не удалось найти сведения по теме «тип занятости».",
-        "recommendation": "Какой тип занятости предусмотрен для этой должности?",
+        "problem": "В карточке не указано условие по теме «требования».",
+        "recommendation": "Какие навыки, образование или опыт обязательны для этой работы?",
         "method": "rule"
       },
       {
         "topic": "salary",
-        "method": "rule",
         "source_fields": [
           "salary_min",
           "salary_max"
@@ -97,7 +58,70 @@
           "salary_max": 45000
         },
         "problem": "Минимальная зарплата указана выше максимальной.",
-        "recommendation": "Уточните нижнюю и верхнюю границы зарплаты и исправьте диапазон."
+        "recommendation": "Уточните нижнюю и верхнюю границы зарплаты и исправьте диапазон.",
+        "method": "rule"
+      },
+      {
+        "topic": "schedule",
+        "source_fields": [
+          "schedule"
+        ],
+        "source_value": "Гибкий график работы",
+        "problem": "Формулировка оставляет открытым вопрос о рабочих днях, часах или порядке смен.",
+        "recommendation": "В какие дни и часы предстоит работать или как чередуются смены?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "location",
+        "source_fields": [
+          "addresses.address",
+          "addresses.address.location",
+          "addresses.address.address",
+          "workLocation",
+          "work_address",
+          "address",
+          "location.address",
+          "location.city",
+          "location",
+          "city",
+          "region.name",
+          "additionalInfo",
+          "benefitDetails",
+          "conditions",
+          "description",
+          "duties",
+          "duty",
+          "qualification",
+          "requirement",
+          "requirements",
+          "responsibilities"
+        ],
+        "source_value": "",
+        "problem": "В карточке не указано условие по теме «место работы».",
+        "recommendation": "В каком населённом пункте и по какому адресу предстоит работать? Возможна ли удалённая работа?",
+        "method": "rule"
+      },
+      {
+        "topic": "employment",
+        "source_fields": [
+          "employment",
+          "employment_type",
+          "employmentType",
+          "additionalInfo",
+          "benefitDetails",
+          "conditions",
+          "description",
+          "duties",
+          "duty",
+          "qualification",
+          "requirement",
+          "requirements",
+          "responsibilities"
+        ],
+        "source_value": "",
+        "problem": "В карточке не указано условие по теме «тип занятости».",
+        "recommendation": "Уточните тип занятости, например полная, частичная или совместительство.",
+        "method": "rule"
       }
     ],
     "url": "https://example.org/vacancies/1"
@@ -105,5 +129,157 @@
   {
     "id": "00000000-0000-4000-8000-000000000002",
     "issues": []
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "issues": [
+      {
+        "topic": "requirements",
+        "source_fields": [
+          "requirement.qualification",
+          "description"
+        ],
+        "source_value": {
+          "requirement.qualification": "Можно без опыта работы",
+          "description": "опыт работы от 2 лет."
+        },
+        "problem": "Есть разные сведения об обязательности опыта.",
+        "recommendation": "Уточните, нужен ли опыт, и укажите минимальный стаж, если он обязателен.",
+        "method": "rule"
+      },
+      {
+        "topic": "salary",
+        "source_fields": [
+          "salary_min",
+          "salary_max",
+          "description"
+        ],
+        "source_value": {
+          "salary_min": 45000,
+          "salary_max": 55000,
+          "description": "70 000 рублей в месяц."
+        },
+        "problem": "Указаны несовместимые суммы оплаты.",
+        "recommendation": "Согласуйте размер оплаты между полями и уточните период и учёт НДФЛ.",
+        "method": "rule"
+      },
+      {
+        "topic": "schedule",
+        "source_fields": [
+          "schedule",
+          "description"
+        ],
+        "source_value": {
+          "schedule": "Сменный график 2/2",
+          "description": "5/2 с 09:00 до 18:00."
+        },
+        "problem": "Указаны несовместимые рабочие часы или варианты чередования смен.",
+        "recommendation": "Уточните рабочие часы и схему смен. Если есть варианты на выбор, явно перечислите их.",
+        "method": "rule"
+      },
+      {
+        "topic": "location",
+        "source_fields": [
+          "addresses.address[0].location",
+          "description"
+        ],
+        "source_value": {
+          "addresses.address[0].location": "Калининград, ул. Мира, д. 10",
+          "description": "Советск, ул. Ленина, д. 10."
+        },
+        "problem": "Указаны разные населённые пункты или форматы присутствия.",
+        "recommendation": "Уточните фактическое место работы и согласуйте адрес и формат присутствия.",
+        "method": "rule"
+      },
+      {
+        "topic": "employment",
+        "source_fields": [
+          "employment",
+          "description"
+        ],
+        "source_value": {
+          "employment": "Полная занятость",
+          "description": "частичная занятость."
+        },
+        "problem": "Указаны несовместимые условия занятости.",
+        "recommendation": "Уточните фактический тип занятости или опишите, когда доступен каждый вариант.",
+        "method": "rule"
+      }
+    ]
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "issues": [
+      {
+        "topic": "job_title",
+        "source_fields": [
+          "job-name"
+        ],
+        "source_value": "Специалист",
+        "problem": "По названию трудно понять роль и специализацию сотрудника.",
+        "recommendation": "Укажите название должности и специализацию.",
+        "method": "rule"
+      },
+      {
+        "topic": "duties",
+        "source_fields": [
+          "duty"
+        ],
+        "source_value": "Решение текущих задач руководства отдела",
+        "problem": "Формулировка не объясняет, какие задачи сотрудник будет выполнять регулярно.",
+        "recommendation": "Какие задачи нужно выполнять регулярно и с чем предстоит работать?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "requirements",
+        "source_fields": [
+          "requirements"
+        ],
+        "source_value": "Ответственность и исполнительность",
+        "problem": "Формулировка не даёт конкретных обязательных требований.",
+        "recommendation": "Какие навыки, образование или опыт обязательны для этой работы?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "salary",
+        "source_fields": [
+          "salary"
+        ],
+        "source_value": "Согласно штатному расписанию",
+        "problem": "Формулировка не указывает сумму или диапазон оплаты.",
+        "recommendation": "Какой оклад или диапазон оплаты предусмотрен и за какой период?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "schedule",
+        "source_fields": [
+          "schedule"
+        ],
+        "source_value": "Посменный график по производственной необходимости",
+        "problem": "Формулировка оставляет открытым вопрос о рабочих днях, часах или порядке смен.",
+        "recommendation": "В какие дни и часы предстоит работать или как чередуются смены?",
+        "method": "rule"
+      },
+      {
+        "topic": "location",
+        "source_fields": [
+          "workLocation"
+        ],
+        "source_value": "На территории работодателя",
+        "problem": "По указанным сведениям неясно, где предстоит работать.",
+        "recommendation": "В каком населённом пункте и по какому адресу предстоит работать? Возможна ли удалённая работа?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "employment",
+        "source_fields": [
+          "employment"
+        ],
+        "source_value": "Формат занятости обсуждается",
+        "problem": "По формулировке невозможно определить тип занятости.",
+        "recommendation": "Уточните тип занятости, например полная, частичная или совместительство.",
+        "method": "nearest_neighbor"
+      }
+    ]
   }
 ]
