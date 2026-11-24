@@ -59,7 +59,9 @@ jobs:
 
       - name: Run the documented Docker command and verify its output
         run: |
-          export REPORT_UID="$(id -u)" REPORT_GID="$(id -g)"
+          REPORT_UID="$(id -u)"
+          REPORT_GID="$(id -g)"
+          export REPORT_UID REPORT_GID
           docker compose -p vacancy-ci run --build --rm -T report
           cmp reports/sample-report.json examples/report.json
           docker compose -p vacancy-ci run --rm -T report \

@@ -2,10 +2,14 @@ import argparse
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+import re
 
 from report_storage import report_lock, write_report
 from validation import load_local, validate_report
 from vacancy_checks import check_conditions
+
+
+COMPACT_UTC_OFFSET = re.compile(r"([+-][0-9]{2})([0-9]{2})$")
 
 
 def read_page_vacancies(payload):
@@ -52,7 +56,9 @@ def updated_at(vacancy):
         value = vacancy.get(field)
         if isinstance(value, str):
             try:
-                timestamp = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+                # The API sends offsets like +0300. Python 3.10 requires the colon.
+                value = value[:-1] + "+00:00" if value.endswith("Z") else COMPACT_UTC_OFFSET.sub(r"\1:\2", value)
+                timestamp = datetime.fromisoformat(value)
             except ValueError:
                 continue
             if timestamp.tzinfo is not None:
