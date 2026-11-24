@@ -4,46 +4,72 @@
 
 ## Быстрый запуск в Docker
 
-Запустите Docker с Compose v2 и выполните команду из корня проекта.
+1. На GitHub выберите **Code → Download ZIP** и распакуйте архив. Откройте терминал в папке, где лежит `compose.yaml`. Если репозиторий уже клонирован, откройте его папку.
+2. На Windows установите и запустите Docker Desktop с WSL 2 в режиме Linux-контейнеров. На Linux установите Docker Engine и плагин Compose v2. Проверьте наличие Compose командой `docker compose version`. [Установка на Windows](https://docs.docker.com/desktop/setup/install/windows-install/) · [Установка Compose](https://docs.docker.com/compose/install/)
+3. Выберите режим. Эти команды одинаковы для PowerShell и Linux.
 
-```sh
-docker compose run --build --rm report
+| Что запустить | Команда | Файл отчёта в папке проекта |
+| --- | --- | --- |
+| Проверить четыре учебные вакансии | `docker compose run --build --rm report` | `reports/sample-report.json` |
+| Загрузить вакансии Калининградской области через API «Работа в России» | `docker compose run --build --rm live` | `reports/report.json` |
+
+При первой сборке Docker может скачать базовый образ. Учебные данные уже лежат в репозитории. После запуска терминал покажет количество проверенных вакансий и путь к отчёту. Откройте файл в любом текстовом редакторе. Например, учебный отчёт можно открыть командой `notepad .\reports\sample-report.json` в PowerShell или `less reports/sample-report.json` в Linux. В каждом объекте JSON поле `issues` содержит замечания и вопросы для работодателя.
+
+Если API недоступен, команда `live` напечатает ошибку. Последний успешный `reports/report.json` сохранится, если он уже есть. Учебный режим можно запустить отдельно.
+
+### Как проверить запросы к API
+
+Для короткой проверки рабочего режима создайте файл `.env` рядом с `compose.yaml` и задайте лимит.
+
+```dotenv
+VACANCY_LIMIT=4
 ```
 
-Команда проверяет четыре учебные вакансии. Терминал покажет количество вакансий и путь к файлу. Откройте **`reports/sample-report.json`** в папке проекта, чтобы увидеть замечания и вопросы работодателю. При первой сборке Docker может скачать базовый образ. Сами учебные данные входят в проект.
+Запустите `docker compose run --build --rm live`. При достаточном числе вакансий в журнале появятся запросы с `offset=0` и `offset=1`. Откройте `reports/report.json` после сообщения о сохранении отчёта.
 
-Чтобы загрузить реальные вакансии из API, выполните команду ниже. Результат появится в **`reports/report.json`**.
+В `.env` можно указать URL через `VACANCY_SOURCE` и тайм-аут в секундах через `VACANCY_TIMEOUT`. Чтобы обратиться напрямую по адресу из задания, задайте `VACANCY_SOURCE=http://opendata.trudvsem.ru/api/v1/vacancies/region/39`.
 
-```sh
-docker compose run --build --rm live
-```
-
-Источник, лимит и тайм-аут рабочего запуска задаются переменными `VACANCY_SOURCE`, `VACANCY_LIMIT` и `VACANCY_TIMEOUT`. Если контейнер не может записать файл в Linux, выполните команду с `--user "$(id -u):$(id -g)"` перед именем сервиса (`report` или `live`).
-
-Для своего JSON укажите абсолютный путь к входному файлу. Результат будет в `reports/file-report.json`.
-
-```sh
-docker compose run --build --rm -v "/путь/к/вакансиям.json:/input/vacancies.json:ro" report python analyze_vacancies.py /input/vacancies.json --output reports/file-report.json
-```
+Если контейнер не может записать файл в Linux, добавьте `--user "$(id -u):$(id -g)"` перед именем сервиса (`report` или `live`).
 
 ## Проверочный запуск с Python
 
-Нужен Python 3.10 или новее. Используется только стандартная библиотека. Локальная модель работает без интернета, регистрации и ключей.
+Если Docker не установлен, достаточно Python 3.10 или новее. Используется только стандартная библиотека. Локальная модель работает без интернета, регистрации и ключей.
 
-```sh
-python analyze_vacancies.py examples/vacancies.json --output reports/sample-report.json
-python -m unittest -v
+В Windows откройте PowerShell в папке проекта.
+
+```powershell
+py analyze_vacancies.py examples/vacancies.json --output reports/sample-report.json
+py -m unittest -v
 ```
 
-В Linux вместо `python` можно использовать `python3`. Для проверочных данных организаторов замените `examples/vacancies.json` на свой файл. Принимается один ответ API v1 с `results.vacancies` либо массив таких страниц. Анализируются все вакансии из файла. Для повторяющегося ID берётся последняя карточка. [Пример данных](examples/vacancies.json) и [пример отчёта](examples/report.json) используют вымышленные карточки в формате API. GitHub Actions сверяет результат учебного запуска в Docker с эталоном.
+Если установленный Python запускается командой `python`, используйте её вместо `py`.
+
+В Linux выполните следующие команды из папки проекта.
+
+```sh
+python3 analyze_vacancies.py examples/vacancies.json --output reports/sample-report.json
+python3 -m unittest -v
+```
+
+### Свой JSON или данные организаторов
+
+Положите файл `vacancies.json` в папку проекта или укажите путь к файлу в кавычках. Результат будет в `reports/file-report.json`. На Windows используйте `py` вместо `python3`.
+
+```sh
+python3 analyze_vacancies.py "vacancies.json" --output reports/file-report.json
+```
+
+Принимается один ответ API v1 с `results.vacancies` либо массив таких страниц. Анализируются все вакансии из файла. Для повторяющегося ID берётся последняя карточка. [Учебный JSON](examples/vacancies.json) содержит вымышленные вакансии. GitHub Actions сверяет отчёт из Docker с [эталоном](examples/report.json).
 
 ## Рабочий запуск
 
 Точка входа — `run_report.py`. Скрипт запрашивает страницы API региона 39 и передаёт карточки тому же анализатору, который работает с локальным JSON. По умолчанию лимит в 20 уникальных вакансий и размер страницы 10 дают как минимум две страницы, когда данных достаточно. [Документация API «Работа в России»](https://trudvsem.ru/opendata/api)
 
 ```sh
-python run_report.py --limit 20 --output reports/report.json
+python3 run_report.py --limit 20 --output reports/report.json
 ```
+
+В PowerShell замените `python3` на `py`.
 
 | Аргумент | Назначение |
 | --- | --- |
@@ -60,7 +86,7 @@ python run_report.py --limit 20 --output reports/report.json
 
 В GitHub Actions отчёт запускается ежедневно в 05:17 UTC (07:17 по Калининграду). Расписание меняется в `cron`. Для ручного запуска откройте **Actions → Vacancy report → Run workflow**. Переменные репозитория `VACANCY_SOURCE`, `VACANCY_LIMIT` и `VACANCY_TIMEOUT` управляют источником, лимитом и тайм-аутом. Ручной и запланированный запуски вызывают одну команду. [Конфигурация workflow](.github/workflows/report.yml)
 
-Успешный запуск сохраняет файл в артефакте `vacancy-report`. Если обновление завершается ошибкой, артефакт последнего успешного запуска остаётся доступен на его странице в пределах настроенного срока хранения. Просмотр работы расписания и загрузки страниц доступен в журнале workflow.
+Войдите в GitHub и откройте страницу успешного запуска. В разделе **Artifacts** скачайте архив `vacancy-report`. Внутри лежит `report.json`. Если обновление завершается ошибкой, артефакт предыдущего успешного запуска остаётся доступен на странице того запуска в пределах настроенного срока хранения. Просмотр работы расписания и загрузки страниц доступен в журнале workflow. [Скачивание артефактов](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)
 
 Если облачный runner возвращает сетевые ошибки, этот же скрипт можно запускать по расписанию на Linux-хосте, которому доступен портал. Пользовательский таймер systemd настроен на 07:17 по Калининграду. Выполните команды из корня проекта. Ссылку `~/.local/share/transparent-vacancy` достаточно создать один раз.
 
@@ -101,7 +127,7 @@ systemctl --user start transparent-vacancy.service
 
 ## Видео
 
-Ролик длится 1 минуту 15 секунд. В нём показаны загрузка двух страниц с учебного HTTP-сервера в формате API, работа модели, обе цитаты для конфликтующего графика и сохранение отчёта после сбоя второй страницы. [Скачать демонстрацию](demo.mp4?raw=true)
+Ролик длится 1 минуту 10 секунд. Сначала показан вывод реальной загрузки двух страниц с портала «Работа в России». На учебных данных показаны замечание от модели, обе цитаты для конфликтующего графика и сохранение предыдущего отчёта после сбоя второй страницы. [Скачать демонстрацию](demo.mp4?raw=true)
 
 ## Вклад участников
 
