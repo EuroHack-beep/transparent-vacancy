@@ -21,6 +21,13 @@ def page(ids, total):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_timeout_retries_same_page(self):
+        with patch("fetch_vacancies.urlopen", side_effect=[TimeoutError(), page(["a"], 1)]) as api, \
+             patch("fetch_vacancies.sleep"):
+            result = fetch_vacancies(REGION_39, 1)
+        self.assertEqual(result["meta"]["total"], "1")
+        self.assertEqual(api.call_args_list[0].args[0].full_url, api.call_args_list[1].args[0].full_url)
+
     def test_pagination_with_overlapping_pages(self):
         pages = [page(["a", "b"], 6), page(["b", "c"], 6), page(["d", "e"], 6)]
         with patch("fetch_vacancies.urlopen", side_effect=pages) as api:

@@ -2,6 +2,8 @@ import argparse
 import json
 from http.client import HTTPException
 from pathlib import Path
+from time import sleep
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
@@ -9,6 +11,21 @@ from analyze_vacancies import read_vacancies, write_report
 
 
 REGION_39 = "https://opendata.trudvsem.ru/api/v1/vacancies/region/39"
+
+
+def read_page(url):
+    request = Request(url, headers={"Accept": "application/json", "User-Agent": "transparent-vacancy/1.0"})
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=60) as response:
+                return json.load(response)
+        except HTTPError as error:
+            if attempt or error.code not in (408, 502, 503, 504):
+                raise
+        except (TimeoutError, ConnectionError, HTTPException, URLError):
+            if attempt:
+                raise
+        sleep(1)
 
 
 def fetch_vacancies(url, limit):
@@ -26,9 +43,7 @@ def fetch_vacancies(url, limit):
     while len(collected) < limit:
         query = urlencode(filters + [("offset", offset), ("limit", page_size)])
         page_url = urlunsplit(source._replace(query=query, fragment=""))
-        request = Request(page_url, headers={"Accept": "application/json"})
-        with urlopen(request, timeout=30) as response:
-            page = json.load(response)
+        page = read_page(page_url)
         records = list(read_vacancies(page))
         ids = tuple(record["id"] for record in records)
         if ids and ids in seen_pages:
