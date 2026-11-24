@@ -32,15 +32,23 @@ PATTERNS = {
     "duties": r"обязанности\s*[:—]\s*\w+|предстоит\s+\w+|выполнять|вести уч[её]т|обслуживать|оформлять|консультировать|проверять|принимать (?:заказы|документы)",
     "requirements": r"опыт[а]?\s+работы|без опыта|образовани[ея]|знани[ея]|умение|требования\s*[:—]\s*\w+",
     "salary": r"\d[\d\s.,–—-]*(?:тыс|руб|₽)|(?:оклад|зарплата|оплата|ставка|заработная плата)\s*[:—-]?\s*(?:от\s+)?\d",
-    "schedule": r"\b[1-6]\s*[/хx×]\s*[1-6]\b|\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\bс\s+\d{1,2}(?:\.\d{2})?\s+до\s+\d{1,2}\b|понедельник|по будням|пятиднев|два через два|смен[аы]\s+(?:по\s+)?\d+\s+час",
-    "location": r"удал[её]нн|дистанционн|(?:адрес|место работы)\s*[:—]\s*\w+|\b(?:улица|проспект|ул\.|пр-т)\s+\w+",
+    "schedule": r"\b[1-6]\s*[/хx×]\s*[1-6]\b|\b(?:график|смена|работа)\s+(?:с\s+)?\d{1,2}:\d{2}\b|\b\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\b|\bс\s+\d{1,2}(?:\.\d{2})?\s+до\s+\d{1,2}\b|понедельник|по будням|пятиднев|два через два|смен[аы]\s+(?:по\s+)?\d+\s+час",
+    "location": r"\bкалининград(?:е)?\b|удал[её]нн|дистанционн|(?:адрес|место работы)\s*[:—]\s*\w+|\b(?:улица|проспект|ул\.|пр-т)\s+\w+",
     "employment": r"(?:полная|частичная|временная|сезонная|постоянная) занятость|совместительств|на полную ставку|на полставки|неполная занятость",
 }
 VAGUE = {
     "schedule": "Формулировка оставляет открытым вопрос о рабочих днях и часах.",
     "salary": "Формулировка не указывает сумму оплаты.",
 }
-EMPTY = {"", "-", "—", "не указано", "не указан", "не указаны", "нет данных", "не определено"}
+EMPTY = {"", "-", "—", "не указано", "не указан", "не указаны", "нет данных", "не определено", "уточняется"}
+
+
+REMOTE_DENIAL = re.compile(
+    r"(?:без|нет|исключена|невозможна)\s+(?:удал[её]нн|дистанционн)\w*(?:\s+работ\w*)?"
+    r"|(?:удал[её]нн|дистанционн)\w*(?:\s+(?:работ\w*|формат))?\s+"
+    r"(?:невозмож\w*|исключ\w*|не\s+(?:предусмотр\w*|допуска\w*|возмож\w*))",
+    re.I,
+)
 
 
 def clean(value):
@@ -62,7 +70,7 @@ def leaves(value, path=""):
 def ambiguous_evidence(topic, fields):
     for path, value in fields:
         phrases = re.split(r"[.;!?\n]+", clean(value))
-        if path == "salary" or path == "schedule" or path.startswith("shift["):
+        if path in {"salary", "schedule", "shift"} or path.startswith("shift["):
             label = "зарплата" if path == "salary" else "график"
             phrases.extend(f"{label} {phrase}" for phrase in tuple(phrases) if phrase.strip())
         if any(classify(phrase) == topic for phrase in phrases):
@@ -72,17 +80,20 @@ def ambiguous_evidence(topic, fields):
     return None
 
 
+SALARY_AMOUNT = re.compile(r"(?:от )?[1-9][0-9]*(?: [0-9]{3})*(?: *(?:[-–—]|до) *[1-9][0-9]*(?: [0-9]{3})*)?", re.I)
+
+
 def check_conditions(vacancy, has_salary_bound):
     relevant = set(NARRATIVE)
     for paths in STRUCTURED.values():
         relevant.update(path.split(".")[0] for path in paths)
     fields = list(leaves({k: v for k, v in vacancy.items() if k in relevant}))
-    # Keep original paths for the report and normalise array indices for lookup.
+    # Индексы нужны для цитирования поля, при поиске используем общий путь.
     values = [(path, re.sub(r"\[\d+\]", "", path), value) for path, value in fields]
     prose = [(path, value) for path, key, value in values if key.split(".")[0] in NARRATIVE]
     narrative = "\n".join(clean(value) for _, value in prose)
     issues = []
-    for topic, (primary, name, question) in TOPICS.items():
+    for topic, (_, name, question) in TOPICS.items():
         direct = [(path, value) for path, key, value in values
                   if any(key == p or key.startswith(p + ".") for p in STRUCTURED[topic])]
         if topic == "salary" and has_salary_bound:
@@ -90,10 +101,13 @@ def check_conditions(vacancy, has_salary_bound):
         if topic == "salary":
             direct = [(p, v) for p, v in direct if clean(v) not in ("0", "0.0")]
         context = narrative + "\n" + "\n".join(clean(value) for _, value in direct)
+        if topic == "location":
+            context = REMOTE_DENIAL.sub(" ", context)
+            direct = [(p, v) for p, v in direct if REMOTE_DENIAL.search(clean(v)) is None]
         if re.search(PATTERNS[topic], context, re.I):
             continue
         if topic in VAGUE:
-            if topic == "salary" and any(re.search(r"\b[1-9]\d{2,}\b", clean(v)) for _, v in direct):
+            if topic == "salary" and any(SALARY_AMOUNT.fullmatch(clean(v)) for _, v in direct):
                 continue
             issue = ambiguous_evidence(topic, direct + prose)
             if issue:
@@ -101,8 +115,16 @@ def check_conditions(vacancy, has_salary_bound):
                 continue
             if topic == "schedule" and re.search(r"(?:сменный график|полный рабочий день|вахтовый метод)", narrative, re.I):
                 continue
-        if not direct:
-            issues.append({"topic": topic, "source_fields": [primary], "source_value": "",
-                           "problem": f"В карточке не удалось найти сведения по теме «{name}».",
-                           "recommendation": question, "method": "rule"})
+        if not direct or topic == "salary":
+            searched = STRUCTURED[topic] + NARRATIVE
+            if topic == "salary":
+                searched += ("salary_min", "salary_max")
+            issues.append({
+                "topic": topic,
+                "source_fields": [direct[0][0]] if direct else list(dict.fromkeys(searched)),
+                "source_value": direct[0][1] if direct else "",
+                "problem": VAGUE[topic] if direct else f"В карточке не удалось найти сведения по теме «{name}».",
+                "recommendation": question,
+                "method": "rule",
+            })
     return issues
