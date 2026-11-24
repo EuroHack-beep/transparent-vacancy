@@ -92,7 +92,7 @@ def main():
             vacancies = read_vacancies(json.load(file))
         report = [analyze_vacancy(vacancy) for vacancy in vacancies]
         write_report(args.output, report)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, RecursionError) as error:
         parser.exit(1, f"Ошибка: {error}\n")
 
     print(f"Проверено вакансий: {len(report)}. Отчёт: {args.output}")
