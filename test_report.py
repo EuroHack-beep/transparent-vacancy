@@ -53,6 +53,19 @@ class ReportTests(unittest.TestCase):
                        "Оклад 45000 рублей. График 5/2. Полная занятость. Место работы: Калининград.")
         self.assertEqual(self.topics(description=description), {})
 
+    def test_unrelated_numbers(self):
+        issues = self.topics(salary="Выплаты с 2026 года", description="Собеседование в 10:00")
+        self.assertIn("salary", issues)
+        self.assertIn("schedule", issues)
+        self.assertNotIn("salary", self.topics(salary="45 000 – 55 000"))
+
+    def test_location_and_placeholders(self):
+        self.assertIn("location", self.topics(description="Удаленная работа невозможна"))
+        self.assertNotIn("location", self.topics(description="Работа в Калининграде"))
+        self.assertIn("employment", self.topics(employment="Уточняется"))
+        for word in ("Удаленная", "Удалённая"):
+            self.assertNotIn("location", self.topics(description=f"{word} работа"))
+
     def test_duplicate_ids(self):
         data = {"results": {"vacancies": [{"vacancy": {"id": "a"}}, {"vacancy": {"id": "a", "duty": "Архив"}}]}}
         self.assertEqual(list(read_vacancies(data)), [{"id": "a", "duty": "Архив"}])
