@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: vacancy-report-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   report:
     runs-on: ubuntu-latest
@@ -18,9 +22,10 @@ jobs:
           python-version: '3.12'
       - name: Generate vacancy report
         env:
-          VACANCY_SOURCE: ${{ vars.VACANCY_SOURCE || 'https://opendata.trudvsem.ru/api/v1/vacancies/region/39' }}
-          VACANCY_LIMIT: ${{ vars.VACANCY_LIMIT || '20' }}
-        run: python run_report.py --url "$VACANCY_SOURCE" --limit "$VACANCY_LIMIT" --output report.json
+          VACANCY_SOURCE: ${{ vars.VACANCY_SOURCE }}
+          VACANCY_LIMIT: ${{ vars.VACANCY_LIMIT }}
+          VACANCY_TIMEOUT: ${{ vars.VACANCY_TIMEOUT }}
+        run: python run_report.py --output report.json
       - uses: actions/upload-artifact@v7
         with:
           name: vacancy-report

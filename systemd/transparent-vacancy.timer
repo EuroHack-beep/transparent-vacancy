@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily Transparent Vacancy report
+
+[Timer]
+OnCalendar=*-*-* 07:17:00 Europe/Kaliningrad
+Persistent=true
+
+[Install]
+WantedBy=timers.target
