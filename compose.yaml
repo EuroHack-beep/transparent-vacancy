@@ -1,0 +1,22 @@
+x-report: &report
+  build: .
+  read_only: true
+  user: "${REPORT_UID:-1000}:${REPORT_GID:-1000}"
+  volumes:
+    - type: bind
+      source: ./reports
+      target: /app/reports
+      bind:
+        create_host_path: false
+
+services:
+  report:
+    <<: *report
+  live:
+    <<: *report
+    profiles: [live]
+    command: ["python", "run_report.py", "--output", "reports/report.json"]
+    environment:
+      VACANCY_SOURCE: "${VACANCY_SOURCE:-}"
+      VACANCY_LIMIT: "${VACANCY_LIMIT:-}"
+      VACANCY_TIMEOUT: "${VACANCY_TIMEOUT:-}"
