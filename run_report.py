@@ -4,8 +4,9 @@ import logging
 import os
 from pathlib import Path
 
-from analyze_vacancies import analyze_vacancy, read_vacancies, write_report
+from analyze_vacancies import generate_report, read_vacancies
 from fetch_vacancies import REGION_39, fetch_vacancies
+from report_storage import report_lock
 
 
 def main():
@@ -18,13 +19,13 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
-        vacancies = read_vacancies(fetch_vacancies(args.url, args.limit, args.timeout))
-        report = [analyze_vacancy(vacancy) for vacancy in vacancies]
-        write_report(args.output, report)
+        with report_lock(args.output) as destination:
+            vacancies = read_vacancies(fetch_vacancies(args.url, args.limit, args.timeout))
+            count = generate_report(vacancies, destination)
     except (ValueError, OSError, RecursionError, HTTPException) as error:
         saved = f"\nПредыдущий отчёт сохранён: {args.output}" if args.output.is_file() else ""
         parser.exit(1, f"Ошибка формирования отчёта: {error}{saved}\n")
-    print(f"Сохранён отчёт по {len(report)} вакансиям: {args.output}")
+    print(f"Сохранён отчёт по {count} вакансиям: {args.output}")
 
 
 if __name__ == "__main__":

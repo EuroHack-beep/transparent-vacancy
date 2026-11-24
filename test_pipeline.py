@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import os
 import ssl
@@ -27,7 +28,7 @@ def page(ids, total):
 
 
 @contextmanager
-def fixture_portal():
+def fixture_portal(tls_context=None):
     payload = json.loads((ROOT / "examples/vacancies.json").read_text(encoding="utf-8"))
     rows = payload["results"]["vacancies"]
     requests = []
@@ -41,6 +42,11 @@ def fixture_portal():
             query = parse_qs(parsed.query)
             offset, limit = int(query["offset"][0]), int(query["limit"][0])
             requests.append((offset, limit))
+            if parsed.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "/region/39")
+                self.end_headers()
+                return
             if parsed.path == "/failure" and offset == 1:
                 self.send_error(503)
                 return
@@ -54,10 +60,14 @@ def fixture_portal():
             self.wfile.write(data)
 
     with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        scheme = "http"
+        if tls_context is not None:
+            server.socket = tls_context.wrap_socket(server.socket, server_side=True)
+            scheme = "https"
         thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         thread.start()
         try:
-            yield f"http://127.0.0.1:{server.server_port}", requests
+            yield f"{scheme}://127.0.0.1:{server.server_port}", requests
         finally:
             server.shutdown()
             thread.join()
@@ -71,20 +81,19 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["meta"]["total"], "1")
         self.assertEqual(api.call_args_list[0].args[0].full_url, api.call_args_list[1].args[0].full_url)
 
-    def test_restarts_from_first_page_when_official_http_fallback_is_needed(self):
-        exchanges = [page(["https-a"], 2), TimeoutError(), TimeoutError(), page(["http-a"], 2), page(["http-b"], 2)]
+    def test_default_https_never_falls_back_after_second_page_error(self):
+        exchanges = [page(["https-a"], 2), TimeoutError(), TimeoutError()]
         with patch("fetch_vacancies.urlopen", side_effect=exchanges) as api, patch("fetch_vacancies.sleep"), \
              self.assertLogs("fetch_vacancies", level="WARNING"):
-            result = fetch_vacancies(REGION_39, 2)
-        self.assertEqual([item["vacancy"]["id"] for item in result["results"]["vacancies"]],
-                         ["http-a", "http-b"])
+            with self.assertRaisesRegex(ValueError, "offset=1"):
+                fetch_vacancies(REGION_39, 2)
         requests = [urlsplit(call.args[0].full_url) for call in api.call_args_list]
         self.assertEqual([(url.scheme, parse_qs(url.query)["offset"][0]) for url in requests],
-                         [("https", "0"), ("https", "1"), ("https", "1"),
-                          ("http", "0"), ("http", "1")])
+                         [("https", "0"), ("https", "1"), ("https", "1")])
 
     def test_custom_https_source_never_falls_back_to_http(self):
-        with patch("fetch_vacancies.urlopen", side_effect=TimeoutError()) as api, \
+        with patch.dict(os.environ, {"VACANCY_ALLOWED_ORIGINS": "https://example.org"}), \
+             patch("fetch_vacancies.urlopen", side_effect=TimeoutError()) as api, \
              patch("fetch_vacancies.sleep"), self.assertLogs("fetch_vacancies", level="WARNING"):
             with self.assertRaisesRegex(ValueError, "offset=0"):
                 fetch_vacancies("https://example.org/source", 2)
@@ -93,10 +102,11 @@ class PipelineTests(unittest.TestCase):
 
     def test_invalid_tls_certificate_never_switches_protocol(self):
         with patch("fetch_vacancies.urlopen", side_effect=URLError(ssl.SSLCertVerificationError())) as api, \
-             patch("fetch_vacancies.sleep"), self.assertLogs("fetch_vacancies", level="WARNING"):
+             patch("fetch_vacancies.sleep") as retry:
             with self.assertRaisesRegex(ValueError, "offset=0"):
                 fetch_vacancies(REGION_39, 2)
-        self.assertEqual(api.call_count, 2)
+        self.assertEqual(api.call_count, 1)
+        retry.assert_not_called()
         self.assertTrue(all(call.args[0].full_url.startswith("https:") for call in api.call_args_list))
 
     def test_pagination_with_overlapping_pages(self):
@@ -136,6 +146,16 @@ class PipelineTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fetch_vacancies(REGION_39, 5)
 
+    def test_total_shrink_and_page_budget_reject_partial_reports(self):
+        with patch("fetch_vacancies.urlopen", side_effect=[page(["a", "b"], 5), page(["c"], 3)]):
+            with self.assertRaisesRegex(ValueError, "сокращение"):
+                fetch_vacancies(REGION_39, 4)
+        with patch.dict(os.environ, {"VACANCY_MAX_PAGES": "1"}), \
+             patch("fetch_vacancies.urlopen", return_value=page(["a", "b"], 5)) as api:
+            with self.assertRaisesRegex(ValueError, "лимит страниц"):
+                fetch_vacancies(REGION_39, 4)
+            self.assertEqual(api.call_count, 1)
+
     def test_short_page_with_more_results_and_unexpected_empty_page(self):
         with patch("fetch_vacancies.urlopen", side_effect=[page(["a"], 2), page(["b"], 2)]):
             self.assertEqual(fetch_vacancies(REGION_39, 4)["meta"]["total"], "2")
@@ -147,20 +167,29 @@ class PipelineTests(unittest.TestCase):
         with fixture_portal() as (url, requests), tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "reports" / "latest.json"
             command = [sys.executable, str(ROOT / "run_report.py"), "--output", str(output)]
-            env = {**os.environ, "VACANCY_LIMIT": "4", "VACANCY_SOURCE": url + "/region/39", "VACANCY_TIMEOUT": "2"}
+            env = {**os.environ, "VACANCY_LIMIT": "4", "VACANCY_SOURCE": url + "/region/39",
+                   "VACANCY_TIMEOUT": "2", "VACANCY_ALLOW_HTTP": "1", "VACANCY_PRIVATE_ORIGINS": url}
             for _ in range(2):
                 requests.clear()
                 subprocess.run(command, env=env, check=True, capture_output=True, timeout=10)
                 self.assertEqual(output.read_bytes(), (ROOT / "examples/report.json").read_bytes())
                 self.assertEqual(requests, [(0, 2), (1, 2)])
             requests.clear()
+            original = hashlib.sha256(output.read_bytes()).digest()
             failure = subprocess.run(command + ["--url", url + "/failure"], env=env,
                                      capture_output=True, text=True, timeout=10)
             self.assertEqual(failure.returncode, 1)
             self.assertIn("offset=1", failure.stderr)
             self.assertIn("Предыдущий отчёт сохранён", failure.stderr)
             self.assertEqual(requests, [(0, 2), (1, 2), (1, 2)])
-            self.assertEqual(output.read_bytes(), (ROOT / "examples/report.json").read_bytes())
+            self.assertEqual(hashlib.sha256(output.read_bytes()).digest(), original)
+            requests.clear()
+            redirected = subprocess.run(command + ["--url", url + "/redirect"], env=env,
+                                        capture_output=True, text=True, timeout=10)
+            self.assertEqual(redirected.returncode, 1)
+            self.assertIn("Перенаправление", redirected.stderr)
+            self.assertEqual(requests, [(0, 2)])
+            self.assertEqual(hashlib.sha256(output.read_bytes()).digest(), original)
 
     def test_offline_multiple_pages(self):
         with tempfile.TemporaryDirectory() as directory:

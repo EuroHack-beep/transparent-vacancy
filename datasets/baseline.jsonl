@@ -1,0 +1,57 @@
+{"text": "гибкий график", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "гибкий режим работы", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "индивидуальный график", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "график по договоренности", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "график обсуждается на собеседовании", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "часы работы согласуем индивидуально", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "смены согласуются отдельно", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "график устанавливается по согласованию сторон", "topic": "schedule", "label": 1, "source": "baseline-handwritten"}
+{"text": "конкурентная зарплата", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "конкурентная заработная плата", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "достойная оплата труда", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "зарплата по договоренности", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "уровень дохода обсудим на собеседовании", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "оклад по результатам собеседования", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "заработная плата обсуждается индивидуально", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "зарплата согласно штатному расписанию", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "оплата по тарифной сетке", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "достойный уровень дохода", "topic": "salary", "label": 1, "source": "baseline-handwritten"}
+{"text": "специалист широкого профиля", "topic": "job_title", "label": 1, "source": "baseline-handwritten"}
+{"text": "универсальный специалист", "topic": "job_title", "label": 1, "source": "baseline-handwritten"}
+{"text": "работник на разные задачи", "topic": "job_title", "label": 1, "source": "baseline-handwritten"}
+{"text": "выполнение поручений руководителя", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "другие задачи по поручению начальника", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "работа согласно должностной инструкции", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "решение текущих задач руководства", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "выполнять различные обязанности", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "подробности на собеседовании", "topic": "duties", "label": 1, "source": "baseline-handwritten"}
+{"text": "опыт приветствуется", "topic": "requirements", "label": 1, "source": "baseline-handwritten"}
+{"text": "желателен релевантный опыт работы", "topic": "requirements", "label": 1, "source": "baseline-handwritten"}
+{"text": "профильное образование", "topic": "requirements", "label": 1, "source": "baseline-handwritten"}
+{"text": "ответственность и исполнительность", "topic": "requirements", "label": 1, "source": "baseline-handwritten"}
+{"text": "уверенный пользователь компьютера", "topic": "requirements", "label": 1, "source": "baseline-handwritten"}
+{"text": "на территории работодателя", "topic": "location", "label": 1, "source": "baseline-handwritten"}
+{"text": "на объектах компании", "topic": "location", "label": 1, "source": "baseline-handwritten"}
+{"text": "офис в центре города", "topic": "location", "label": 1, "source": "baseline-handwritten"}
+{"text": "точный адрес обсуждается", "topic": "location", "label": 1, "source": "baseline-handwritten"}
+{"text": "формат занятости обсуждается", "topic": "employment", "label": 1, "source": "baseline-handwritten"}
+{"text": "варианты оформления", "topic": "employment", "label": 1, "source": "baseline-handwritten"}
+{"text": "условия оформления по договоренности", "topic": "employment", "label": 1, "source": "baseline-handwritten"}
+{"text": "полный рабочий день", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "неполный рабочий день", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "сменный график два через два", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "график пять дней в неделю", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "оплата почасовая 350 рублей", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "заработная плата от 50000 рублей", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "проверять график производства", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "вести учет заработной платы", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "составлять график отпусков", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "гибкий подход к решению задач", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "знание графических программ", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "выплачивать заработную плату", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "разработка графиков работы сотрудников", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "специалист по кадрам", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "обслуживать компьютеры и сетевое оборудование", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "работа полностью удаленная", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "полная занятость", "topic": "other", "label": 0, "source": "baseline-handwritten"}
+{"text": "опыт работы от одного года", "topic": "other", "label": 0, "source": "baseline-handwritten"}

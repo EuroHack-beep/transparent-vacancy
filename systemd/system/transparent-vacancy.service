@@ -1,0 +1,21 @@
+[Unit]
+Description=Transparent Vacancy system report
+
+[Service]
+Type=oneshot
+DynamicUser=true
+WorkingDirectory=/opt/transparent-vacancy
+EnvironmentFile=-/etc/transparent-vacancy/config.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+StateDirectory=transparent-vacancy
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 run_report.py --output /var/lib/transparent-vacancy/latest.json
+TimeoutStartSec=15min
+MemoryMax=512M
+CPUQuota=200%
+TasksMax=64
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

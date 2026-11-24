@@ -5,8 +5,16 @@ from decimal import Decimal, InvalidOperation
 import re
 
 
+MIXED_WORD = re.compile(r"[а-яa-z]+")
+LATIN_LOOKALIKES = str.maketrans("abcehkmoptxy", "авсенкмортху")
+
+
 def normalize(text):
-    return text.casefold().replace("ё", "е")
+    text = text.casefold().replace("ё", "е")
+    if text.isascii():
+        return text
+    return MIXED_WORD.sub(lambda word: word[0].translate(LATIN_LOOKALIKES)
+                          if not word[0].isascii() else word[0], text)
 
 
 ALTERNATIVE = re.compile(r"\b(?:или|на выбор|по выбору|один из вариантов)\b")
@@ -86,7 +94,7 @@ EMPLOYMENT = {
                 r"полставки|(?:0[,.][1-9]\d*)\s*ставки)\b",
     },
     "term": {
-        "permanent": r"\b(?:постоянн\w*\s+(?:работ\w*|занятост\w*)|бессрочн\w*\s+договор\w*)\b",
+        "permanent": r"\b(?:постоянн\w*\s+(?:работ\w*\b(?!\s+с\b)|занятост\w*)|бессрочн\w*\s+договор\w*)\b",
         "temporary": r"\b(?:(?:временн\w*|сезонн\w*)\s+(?:работ\w*|занятост\w*)|"
                      r"срочн\w*\s+(?:трудов\w*\s+)?договор\w*)\b",
     },
@@ -190,7 +198,7 @@ def pay_from_text(text, structured=False):
             continue
         # Exclude dates, hours, percentages and schedule ratios. A slash after currency may mean a pay period.
         after = text[match.end():].lstrip()
-        if re.match(r"[:%]|\.\d|лет\b|раз\b|(?:час|год|месяц|недел)\w*\b", after):
+        if re.match(r"[:%]|\.\d|лет\b|раз(?:а)?\b|(?:час|год|месяц|недел)\w*\b", after):
             continue
         if not match["currency"] and re.match(r"[-–‑](?:я|й|е|го|му|ая|ый)\b|зарплат\w*\b", after):
             continue
@@ -198,6 +206,8 @@ def pay_from_text(text, structured=False):
             continue
         # A sign-on bonus or travel reimbursement does not establish the wage.
         prefix = text[max(0, match.start() - 50):match.start()]
+        if not (match["currency"] or match["low_scale"] or match["high_scale"] or structured) and not PAY_CUE.search(prefix):
+            continue
         supplements = list(SUPPLEMENT.finditer(prefix))
         wage_terms = list(PAY_CUE.finditer(prefix))
         if supplements and (not wage_terms or supplements[-1].start() > wage_terms[-1].start()):
@@ -240,6 +250,8 @@ def pay_conflict(first, second):
         return False
     # Сумма «на руки» и границы без указания налоговой базы несопоставимы.
     if (first.basis == "net") != (second.basis == "net"):
+        return False
+    if (first.phase == "introductory") != (second.phase == "introductory"):
         return False
     return ((first.high is not None and second.low is not None and first.high < second.low)
             or (second.high is not None and first.low is not None and second.high < first.low))

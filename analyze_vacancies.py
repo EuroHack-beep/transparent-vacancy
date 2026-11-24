@@ -1,8 +1,10 @@
 import argparse
-import json
+from datetime import datetime, timezone
+import logging
 from pathlib import Path
-import tempfile
 
+from report_storage import report_lock, write_report
+from validation import load_local, validate_report
 from vacancy_checks import check_conditions
 
 
@@ -31,9 +33,45 @@ def read_page_vacancies(payload):
         vacancy_id = vacancy.get("id")
         if not isinstance(vacancy_id, str) or not vacancy_id.strip():
             raise ValueError(f"В записи {index} отсутствует строковый vacancy.id.")
-        vacancies.append(vacancy)
+        identifier = vacancy_id.strip()
+        if "vac_url" in vacancy and vacancy["vac_url"] is not None and not isinstance(vacancy["vac_url"], str):
+            raise ValueError(f"В записи {index} поле vacancy.vac_url должно быть строкой.")
+        numbers = {field: vacancy.get(field) for field in ("salary_min", "salary_max", "experience")}
+        if isinstance(vacancy.get("requirement"), dict):
+            numbers["requirement.experience"] = vacancy["requirement"].get("experience")
+        for field, value in numbers.items():
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float, str))):
+                raise ValueError(f"В записи {index} поле {field} должно быть числом или строкой.")
+        vacancies.append(vacancy if identifier == vacancy_id else {**vacancy, "id": identifier})
 
     return vacancies
+
+
+def updated_at(vacancy):
+    for field in ("date_modify", "updated_at", "lastModified", "modified", "last_modified", "update_date"):
+        value = vacancy.get(field)
+        if isinstance(value, str):
+            try:
+                timestamp = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+            except ValueError:
+                continue
+            if timestamp.tzinfo is not None:
+                return timestamp.astimezone(timezone.utc)
+    return None
+
+
+def collect_vacancy(vacancies, vacancy):
+    identifier = vacancy["id"]
+    previous = vacancies.get(identifier)
+    if previous is not None and previous != vacancy:
+        old, new = updated_at(previous), updated_at(vacancy)
+        if old is not None and new is not None and old != new:
+            logging.getLogger(__name__).warning("Найден конфликтующий дубль. Выбрана более свежая запись.")
+            if old > new:
+                return
+        else:
+            logging.getLogger(__name__).warning("Найден конфликтующий дубль. Выбрана последняя запись.")
+    vacancies[identifier] = vacancy
 
 
 def read_vacancies(payload):
@@ -41,7 +79,7 @@ def read_vacancies(payload):
     vacancies = {}
     for page in pages:
         for vacancy in read_page_vacancies(page):
-            vacancies[vacancy["id"].strip()] = vacancy
+            collect_vacancy(vacancies, vacancy)
     return vacancies.values()
 
 
@@ -53,20 +91,11 @@ def analyze_vacancy(vacancy):
     return report_entry
 
 
-def write_report(output_path, report):
-    temporary_path = None
-    try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="\n", dir=output_path.parent, delete=False
-        ) as temporary_file:
-            temporary_path = Path(temporary_file.name)
-            json.dump(report, temporary_file, ensure_ascii=False, indent=2)
-            temporary_file.write("\n")
-        temporary_path.replace(output_path)
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+def generate_report(vacancies, destination):
+    report = [analyze_vacancy(vacancy) for vacancy in vacancies]
+    validate_report(report, {vacancy["id"] for vacancy in vacancies})
+    write_report(destination, report)
+    return len(report)
 
 
 def main():
@@ -78,14 +107,12 @@ def main():
     try:
         if args.input.resolve() == args.output.resolve():
             raise ValueError("Входной файл и файл отчёта должны быть разными.")
-        with args.input.open(encoding="utf-8-sig") as file:
-            vacancies = read_vacancies(json.load(file))
-        report = [analyze_vacancy(vacancy) for vacancy in vacancies]
-        write_report(args.output, report)
+        with report_lock(args.output) as destination:
+            count = generate_report(read_vacancies(load_local(args.input)), destination)
     except (OSError, ValueError, RecursionError) as error:
         parser.exit(1, f"Ошибка: {error}\n")
 
-    print(f"Проверено вакансий: {len(report)}. Отчёт: {args.output}")
+    print(f"Проверено вакансий: {count}. Отчёт: {args.output}")
 
 
 if __name__ == "__main__":

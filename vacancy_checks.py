@@ -1,11 +1,13 @@
 """Compare structured fields and prose, keeping source evidence for each issue."""
 
 from dataclasses import dataclass
+from functools import cached_property
 from html import unescape
 from itertools import combinations
 import re
 
 from clarity_model import classify
+from validation import positive_setting
 from vacancy_facts import (
     ADDRESS, ALTERNATIVE, CITY, LOCALITY, PAY_CUE, REMOTE, ROTATION, SCHEDULE_CUE, UNPAID, WEEKDAYS, WORD_ROTATION,
     Pay, currency_code, employment_facts, location_facts, normalize, pay_conflict, pay_from_text,
@@ -73,11 +75,18 @@ DUTY_GENERIC = re.compile(
 )
 DUTY_DETAIL = re.compile(
     r"\b(?:обслужив\w*|настраива\w*|настройк\w*|ремонт\w*|консультир\w*|"
-    r"каталогизир\w*|регистрир\w*|оформля\w*|архивир\w*|уборка)\s+(?:[а-яa-z0-9]{3,})"
+    r"каталогизир\w*|регистрир\w*|оформля\w*|архивир\w*|уборка)\s+(?:[а-яa-z0-9]{3,})|"
+    r"\b(?:провод\w*\s+урок\w*|разрабатыва\w*\s+тематическ\w*\s+план\w*)\b"
 )
 REQUIREMENT_CUE = re.compile(
     r"\b(?:опыт\w*|образовани\w*|диплом\w*|знани\w*|владени\w*|умени\w*|"
     r"удостоверени\w*|навык\w*|сертификат\w*|разряд\w*|категори\w*|стаж(?:ем|а|у|е)?)\b"
+)
+OPTIONAL_EXPERIENCE = re.compile(r"желател\w*|приветствуется|предпочтительн\w*|будет преимуществом")
+EXPERIENCE_MIN = re.compile(
+    r"\b(?:опыт|стаж)\b[^;]{0,65}?\b(?:от\s+|не\s+менее\s+)"
+    r"(?:(?P<half>полу?года)|(?P<one>одного\s+года|года)|"
+    r"(?P<amount>\d+(?:[.,]\d+)?)\s*(?:[-–‑](?:ти|х|и)\s+)?(?P<unit>лет|год\w*|месяц\w*|мес\.?))\b"
 )
 REQUIREMENT_GENERIC = re.compile(
     r"\b(?:опыт приветствуется|желателен опыт|релевантный опыт|"
@@ -120,8 +129,9 @@ class Evidence:
     value: str | int | float
     structured: bool = False
     labeled: bool = False
+    original: str | int | float | None = None
 
-    @property
+    @cached_property
     def text(self):
         return normalize(clean(self.value))
 
@@ -131,8 +141,8 @@ def clean(value):
 
 
 def plain(value):
-    text = re.sub(r"</?(?:p|div|li|ul|ol|br|tr)\b[^>]*>", "\n", str(value), flags=re.I)
-    return unescape(re.sub(r"<[^>]*>", " ", text)).strip()
+    text = re.sub(r"</?(?:p|div|li|ul|ol|br|tr)\b[^<>]*>", "\n", str(value), flags=re.I)
+    return unescape(re.sub(r"<[^<>]*>", " ", text)).strip()
 
 
 def leaves(value, path=""):
@@ -196,7 +206,15 @@ def prose_topics(text, label):
 
 def evidence_by_topic(vacancy):
     relevant = NARRATIVE | {path.split(".")[0] for paths in STRUCTURED.values() for path in paths}
-    evidence = {topic: [] for topic in TOPICS}
+    maximum = positive_setting("VACANCY_FRAGMENTS", 64, 128)
+    evidence = {topic: {} for topic in TOPICS}
+
+    def add(topic, item):
+        items = evidence[topic]
+        items[item] = None
+        if len(items) > maximum:
+            raise ValueError("Превышен бюджет фрагментов для проверки условий вакансии.")
+
     for path, value in leaves({key: val for key, val in vacancy.items() if key in relevant}):
         lookup = re.sub(r"\[\d+\]", "", path)
         if lookup.rsplit(".", 1)[-1] in {"id", "code", "guid", "lat", "lng", "longitude", "latitude"}:
@@ -207,9 +225,9 @@ def evidence_by_topic(vacancy):
         if lookup in {"duty", "duties", "responsibilities"}:
             direct = [topic for topic in direct if topic != "duties"]
         for topic in direct:
-            evidence[topic].append(Evidence(path, value, structured=True))
+            add(topic, Evidence(path, value, structured=True))
         if lookup in {"schedule", "shift", "workSchedule"} and REMOTE.search(normalize(clean(value))):
-            evidence["location"].append(Evidence(path, value, structured=True))
+            add("location", Evidence(path, value, structured=True))
         if lookup.split(".")[0] not in NARRATIVE or not isinstance(value, str):
             continue
         for label, clause in split_prose(value):
@@ -222,10 +240,11 @@ def evidence_by_topic(vacancy):
             for topic in TOPICS:
                 if topic not in inferred or (topic in direct and label != topic):
                     continue
-                evidence[topic].append(Evidence(
+                add(topic, Evidence(
                     path, clause, structured=lookup in STRUCTURED[topic], labeled=label == topic,
+                    original=value if clause not in value else None,
                 ))
-    return {topic: list(dict.fromkeys(items)) for topic, items in evidence.items()}
+    return {topic: list(items) for topic, items in evidence.items()}
 
 
 VAGUE = {
@@ -304,36 +323,84 @@ def conflict_result(topic, evidence, problem=None, recommendation=None):
     default_problem, default_recommendation = CONFLICTS[topic]
     fields = list(dict.fromkeys(item.field for item in evidence))
     if len(fields) == len(evidence):
-        source_value = {item.field: item.value for item in evidence}
+        source_value = {item.field: quote(item) for item in evidence}
     else:
-        source_value = [{"field": item.field, "value": item.value} for item in evidence]
+        source_value = [{"field": item.field, "value": quote(item)} for item in evidence]
     return {"topic": topic, "source_fields": fields, "source_value": source_value,
             "problem": problem or default_problem,
             "recommendation": recommendation or default_recommendation, "method": "rule"}
 
 
-def salary_conflict(vacancy, items):
+def quote(item):
+    return item.value if item.original is None else item.original
+
+
+def salary_conflicts(vacancy, items):
     low = positive_salary(vacancy.get("salary_min"))
     high = positive_salary(vacancy.get("salary_max"))
     bounds = [Evidence(field, vacancy[field]) for field, amount in
               (("salary_min", low), ("salary_max", high)) if amount is not None]
+    issues = []
     if low is not None and high is not None and low > high:
-        return conflict_result(
+        issues.append(conflict_result(
             "salary", bounds, "Минимальная зарплата указана выше максимальной.",
             "Уточните нижнюю и верхнюю границы зарплаты и исправьте диапазон.",
-        )
+        ))
+        bounds = []
     offers = [(pay, [item]) for item in items if not ALTERNATIVE.search(item.text)
               if (pay := pay_from_text(item.text, item.structured or item.labeled)) is not None]
     if bounds:
         currency = currency_code(normalize(str(vacancy.get("currency") or "")).strip())
         offers.insert(0, (Pay(low, high, currency=currency), bounds))
+    comparable = []
     for pay, source in offers:
         if pay.low is not None and pay.high is not None and pay.low > pay.high:
-            return conflict_result("salary", source, "Нижняя граница оплаты выше верхней.")
-    for (first, first_source), (second, second_source) in combinations(offers, 2):
-        if pay_conflict(first, second):
-            return conflict_result("salary", first_source + second_source)
-    return None
+            issue = conflict_result("salary", source, "Нижняя граница оплаты выше верхней.")
+            if issue not in issues:
+                issues.append(issue)
+        else:
+            comparable.append((pay, source))
+    reported = set()
+    for (first, first_source), (second, second_source) in combinations(comparable, 2):
+        context = tuple(getattr(first, key) or getattr(second, key)
+                        for key in ("unit", "currency", "basis", "phase"))
+        if context not in reported and pay_conflict(first, second):
+            reported.add(context)
+            issue = conflict_result("salary", first_source + second_source)
+            if issue not in issues:
+                issues.append(issue)
+    return issues
+
+
+def experience_facts(item, text):
+    if re.search(r"(?:^|\.)experience$", item.field) and re.fullmatch(r"\d+(?:[.,]\d+)?", text):
+        years = positive_salary(text)
+        return {"experience": {"required"}, "experience_min": {years * 12}} if years else {"experience": {"none"}}
+    if re.search(r"\bбез опыта|опыт\w*\s+(?:не требуется|не нужен|не обязателен)", text):
+        return {"experience": {"none"}}
+    if minimum := EXPERIENCE_MIN.search(text):
+        clause_start = max(text.rfind(";", 0, minimum.start()), text.rfind("\n", 0, minimum.start())) + 1
+        trailing = re.search(r"[;\n]|[.!?]\s", text[minimum.end():])
+        clause_end = minimum.end() + trailing.start() if trailing else len(text)
+        if OPTIONAL_EXPERIENCE.search(text[clause_start:clause_end]):
+            return {}
+        if minimum["half"]:
+            months = 6
+        elif minimum["one"]:
+            months = 12
+        else:
+            amount = positive_salary(minimum["amount"])
+            if amount is None:
+                return {}
+            months = amount if minimum["unit"].startswith("мес") else amount * 12
+        return {"experience": {"required"}, "experience_min": {months}}
+    if OPTIONAL_EXPERIENCE.search(text):
+        return {}
+    if re.search(r"\bопыт\b.{0,70}\b(?:обязател\w*|от\s+(?:[1-9]\d*|года|одного|двух|трех)|не менее)\b", text):
+        return {"experience": {"required"}}
+    if re.match(r"^\W*опыт работы\s+(?:[а-я]{3,})", text) and (item.labeled or text.startswith(("•", "-", "–"))):
+        return {"experience": {"required"}}
+    return {}
 
 
 def axis_values(topic, item):
@@ -342,6 +409,8 @@ def axis_values(topic, item):
         if RECRUITMENT.search(text) and not JOB_SCHEDULE.search(text):
             return {}
         facts = schedule_facts(text)
+        if re.search(r"гибк\w*\s+(?:начал\w*|время)", text):
+            facts["times"] = set()
         if ALTERNATIVE.search(text):
             return {"rotation": facts["rotation"]} if len(facts["rotation"]) > 1 and not OPEN_OPTIONS.search(text) else {}
         return facts
@@ -350,18 +419,13 @@ def axis_values(topic, item):
     if topic == "location":
         if RECRUITMENT.search(text) and not JOB_LOCATION.search(text):
             return {}
+        if re.search(r"\b(?:стажировк\w*|испытательн\w*\s+срок\w*)\b", text):
+            return {}
         return location_facts(text)
     if topic == "employment":
         return employment_facts(text, structured=item.structured or item.labeled)
     if topic == "requirements":
-        if re.search(r"(?:^|\.)experience$", item.field) and re.fullmatch(r"\d+(?:[.,]\d+)?", text):
-            return {"experience": {"required" if positive_salary(text) is not None else "none"}}
-        if re.search(r"\bбез опыта|опыт\w*\s+(?:не требуется|не нужен|не обязателен)", text):
-            return {"experience": {"none"}}
-        if not re.search(r"желател\w*|приветствуется|предпочтительн\w*", text) and re.search(
-            r"\bопыт\b.{0,70}\b(?:обязател\w*|от\s+(?:[1-9]\d*|года|одного|двух|трех)|не менее)\b", text
-        ):
-            return {"experience": {"required"}}
+        return experience_facts(item, text)
     if topic == "duties":
         if re.search(r"\b(?:без холодных звонков|холодные звонки исключены)\b", text):
             return {"calls": {"none"}}
@@ -370,25 +434,39 @@ def axis_values(topic, item):
     return {}
 
 
+TITLE_ROLES = {
+    "archive": r"\b(?:архивист\w*|архивариус\w*)\b",
+    "warehouse": r"\b(?:кладовщик\w*|комплектовщик\w*)\b",
+    "software": r"\b(?:программист\w*|разработчик\w*\s+(?:по|программ\w*))\b",
+    "driver": r"\b(?:водител\w*|шофер\w*)\b",
+    "accounting": r"\bбухгалтер\w*\b",
+}
+
+
 def title_conflict(items):
     titles = [item for item in items if (item.structured or item.labeled)
               and is_specific("job_title", item, False) and not ALTERNATIVE.search(item.text)]
     for first, second in combinations(titles, 2):
-        first_words, second_words = (set(re.findall(r"\w+", item.text)) for item in (first, second))
-        if first_words and second_words and not (first_words <= second_words or second_words <= first_words):
+        first_roles, second_roles = ({role for role, pattern in TITLE_ROLES.items() if re.search(pattern, item.text)}
+                                     for item in (first, second))
+        if len(first_roles) == len(second_roles) == 1 and first_roles.isdisjoint(second_roles):
             return conflict_result("job_title", [first, second])
     return None
 
 
-def cross_field_conflict(topic, items):
+def cross_field_conflicts(topic, items):
     pairs = [(item, axis_values(topic, item)) for item in items]
     address_options = {
         axis: set().union(*(axes.get(axis, set()) for item, axes in pairs
                             if item.field.startswith("addresses.address")))
         for axis in ("city", "address")
     } if topic == "location" else {}
+    reported = set()
+    conflicts = []
     for (first, first_axes), (second, second_axes) in combinations(pairs, 2):
         for axis, left in first_axes.items():
+            if axis in reported:
+                continue
             right = second_axes.get(axis, set())
             if not left or not right or left & right:
                 continue
@@ -402,8 +480,15 @@ def cross_field_conflict(topic, items):
                 other = right if first_address else left
                 if first_address and second_address or (first_address or second_address) and other <= options:
                     continue
-            return conflict_result(topic, [first, second])
-    return None
+            reported.add(axis)
+            issue = conflict_result(topic, [first, second], *(
+                ("Указаны разные значения минимального стажа.",
+                 "Какой минимальный стаж требуется для этой вакансии?")
+                if axis == "experience_min" else ()
+            ))
+            if issue not in conflicts:
+                conflicts.append(issue)
+    return conflicts
 
 
 def is_schedule_choice(topic, axis, item):
@@ -414,13 +499,14 @@ def check_conditions(vacancy):
     issues = []
     for topic, items in evidence_by_topic(vacancy).items():
         if topic == "salary":
-            contradiction = salary_conflict(vacancy, items)
+            conflicts = salary_conflicts(vacancy, items)
         elif topic == "job_title":
-            contradiction = title_conflict(items)
+            title = title_conflict(items)
+            conflicts = [title] if title else []
         else:
-            contradiction = cross_field_conflict(topic, items)
-        if contradiction:
-            issues.append(contradiction)
+            conflicts = cross_field_conflicts(topic, items)
+        if conflicts:
+            issues.extend(conflicts)
             continue
         if topic == "salary" and any(positive_salary(vacancy.get(field)) is not None
                                      for field in ("salary_min", "salary_max")):
@@ -436,7 +522,7 @@ def check_conditions(vacancy):
             question = "В какие дни предстоит работать и как чередуются смены?"
         model_evidence = next((item for item, ambiguous in labels if ambiguous), None)
         if item := model_evidence or next(iter(items), None):
-            problem, fields, value = VAGUE[topic], [item.field], item.value
+            problem, fields, value = VAGUE[topic], [item.field], quote(item)
         else:
             looked_up = (primary,) + STRUCTURED[topic] + tuple(sorted(NARRATIVE))
             if topic == "salary":
