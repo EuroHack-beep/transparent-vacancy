@@ -37,6 +37,21 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual([q["offset"] for q in queries], [["0"], ["1"], ["2"]])
         self.assertTrue(all(q["limit"] == ["2"] for q in queries))
 
+    def test_short_page_disagrees_with_total(self):
+        for ids in ([], ["a"]):
+            with self.subTest(ids=ids), patch("fetch_vacancies.urlopen", return_value=page(ids, 20)):
+                with self.assertRaises(ValueError):
+                    fetch_vacancies(REGION_39, 10)
+
+    def test_genuinely_empty_result(self):
+        with patch("fetch_vacancies.urlopen", return_value=page([], 0)):
+            self.assertEqual(fetch_vacancies(REGION_39, 10)["results"]["vacancies"], [])
+
+    def test_page_size_limit(self):
+        with patch("fetch_vacancies.MAX_PAGE_BYTES", 50), patch("fetch_vacancies.urlopen", return_value=page(["a"], 1)):
+            with self.assertRaisesRegex(ValueError, "размер"):
+                fetch_vacancies(REGION_39, 1)
+
     def test_repeated_page_rejected(self):
         with patch("fetch_vacancies.urlopen", side_effect=[page(["a", "b"], 6), page(["a", "b"], 6)]):
             with self.assertRaises(ValueError):
