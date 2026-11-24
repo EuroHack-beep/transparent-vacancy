@@ -1,0 +1,76 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "issues": [
+      {
+        "topic": "job_title",
+        "source_fields": [
+          "job-name"
+        ],
+        "source_value": "",
+        "problem": "В карточке не удалось найти сведения по теме «название должности».",
+        "recommendation": "Как называется должность?",
+        "method": "rule"
+      },
+      {
+        "topic": "requirements",
+        "source_fields": [
+          "requirements"
+        ],
+        "source_value": "",
+        "problem": "В карточке не удалось найти сведения по теме «требования».",
+        "recommendation": "Какие навыки, образование или опыт нужны для этой работы?",
+        "method": "rule"
+      },
+      {
+        "topic": "schedule",
+        "source_fields": [
+          "schedule"
+        ],
+        "source_value": "Гибкий график работы",
+        "problem": "Формулировка оставляет открытым вопрос о рабочих днях и часах.",
+        "recommendation": "В какие дни и часы предстоит работать?",
+        "method": "nearest_neighbor"
+      },
+      {
+        "topic": "location",
+        "source_fields": [
+          "addresses.address"
+        ],
+        "source_value": "",
+        "problem": "В карточке не удалось найти сведения по теме «место работы».",
+        "recommendation": "По какому адресу предстоит работать или возможна ли удалённая работа?",
+        "method": "rule"
+      },
+      {
+        "topic": "employment",
+        "source_fields": [
+          "employment"
+        ],
+        "source_value": "",
+        "problem": "В карточке не удалось найти сведения по теме «тип занятости».",
+        "recommendation": "Какой тип занятости предусмотрен для этой должности?",
+        "method": "rule"
+      },
+      {
+        "topic": "salary",
+        "method": "rule",
+        "source_fields": [
+          "salary_min",
+          "salary_max"
+        ],
+        "source_value": {
+          "salary_min": 55000,
+          "salary_max": 45000
+        },
+        "problem": "Минимальная зарплата указана выше максимальной.",
+        "recommendation": "Уточните нижнюю и верхнюю границы зарплаты и исправьте диапазон."
+      }
+    ],
+    "url": "https://example.org/vacancies/1"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "issues": []
+  }
+]

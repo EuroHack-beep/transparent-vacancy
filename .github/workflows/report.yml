@@ -1,0 +1,28 @@
+name: Vacancy report
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate vacancy report
+        env:
+          VACANCY_SOURCE: ${{ vars.VACANCY_SOURCE || 'https://opendata.trudvsem.ru/api/v1/vacancies/region/39' }}
+          VACANCY_LIMIT: ${{ vars.VACANCY_LIMIT || '20' }}
+        run: python run_report.py --url "$VACANCY_SOURCE" --limit "$VACANCY_LIMIT" --output report.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vacancy-report
+          path: report.json
+          if-no-files-found: error
